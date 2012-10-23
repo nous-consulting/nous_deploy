@@ -1,18 +1,57 @@
 import sys
-import functools
+from functools import wraps
+
+from fabric.api import run
+from fabric.state import env
+from fabric import network
 
 
-def command(fn):
+def run_as(user):
+    def decorator(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            old_user, host, port = network.normalize(env.host_string)
+            env.host_string = network.join_host_strings(user, host, port)
+            result = func(*args, **kwargs)
+            env.host_string = network.join_host_strings(old_user, host, port)
+            return result
+        return inner
+    return decorator
+
+
+def run_as_sudo(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return run_as(env.server.SUDO_USER)(func)(*args, **kwargs)
+    return wrapper
+
+
+def server_command(fn):
     parent = sys._getframe(1)
     commands = parent.f_locals.setdefault('_commands', [])
     commands.append(fn.__name__)
-    def wrapper(self):
-        print "Wrap wrap"
-        return fn(self)
-    return functools.wraps(fn)(wrapper)
+    def wrapper(self, *args, **kwargs):
+        env.server = self
+        env.host_string = self.host
+        return fn(self, *args, **kwargs)
+    return wraps(fn)(wrapper)
+
+
+def service_command(fn):
+    parent = sys._getframe(1)
+    commands = parent.f_locals.setdefault('_commands', [])
+    commands.append(fn.__name__)
+    def wrapper(self, *args, **kwargs):
+        env.service = self
+        env.server = self.server
+        env.host_string = self.server.host
+        return fn(self, *args, **kwargs)
+    return wraps(fn)(wrapper)
 
 
 class Server(object):
+
+    SUDO_USER = 'root'
 
     def __init__(self, host, name, services, settings={}):
         self.host = host
@@ -25,9 +64,20 @@ class Server(object):
         return dict([(cmd, getattr(self, cmd))
                      for cmd in self._commands])
 
-    @command
-    def setup(self):
-        print "Setting up", self.name
+    @server_command
+    @run_as_sudo
+    def apt_get_update(self, force=False):
+        if not hasattr(env, '_APT_UPDATED') or force:
+            run('apt-get update')
+            env._APT_UPDATED = True
+
+
+    @server_command
+    @run_as_sudo
+    def apt_get_install(self, packages, options=''):
+        """Installs package via apt get."""
+        self.apt_get_update()
+        run('apt-get install %s -y %s' % (options, packages,))
 
 
 class Service(object):
@@ -55,44 +105,44 @@ class Service(object):
 
 class Sentry(Service):
 
-    @command
+    @service_command
     def start(self):
         print "Starting", self.name, self.server.host
 
-    @command
+    @service_command
     def restart(self):
         print "Restarting", self.name, self.server.host
 
 
 class Ututi(Service):
 
-    @command
+    @service_command
     def start(self):
         print "Starting", self.name, self.server.host
 
-    @command
+    @service_command
     def restart(self):
         print "Restarting", self.name, self.server.host
 
 
 class BusyFlow(Service):
 
-    @command
+    @service_command
     def start(self):
         print "Starting", self.name, self.server.host
 
-    @command
+    @service_command
     def restart(self):
         print "Restarting", self.name, self.server.host
 
 
 class BusyFlowCeleryWorker(Service):
 
-    @command
+    @service_command
     def start(self):
         print "Starting", self.name, self.server.host
 
-    @command
+    @service_command
     def restart(self):
         print "Restarting", self.name, self.server.host
 
