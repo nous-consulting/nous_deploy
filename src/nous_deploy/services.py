@@ -1,4 +1,5 @@
 import sys
+from contextlib import contextmanager
 from functools import wraps
 
 from fabric.api import run
@@ -6,15 +7,23 @@ from fabric.state import env
 from fabric import network
 
 
+@contextmanager
+def host_string(new_host_string):
+    try:
+        old_host_string = env.host_string
+        env.host_string = new_host_string
+        yield
+    finally:
+        env.host_string = old_host_string
+
+
 def run_as(user):
     def decorator(func):
         @wraps(func)
         def inner(*args, **kwargs):
             old_user, host, port = network.normalize(env.host_string)
-            env.host_string = network.join_host_strings(user, host, port)
-            result = func(*args, **kwargs)
-            env.host_string = network.join_host_strings(old_user, host, port)
-            return result
+            with host_string(network.join_host_strings(user, host, port)):
+                return func(*args, **kwargs)
         return inner
     return decorator
 
@@ -32,8 +41,8 @@ def server_command(fn):
     commands.append(fn.__name__)
     def wrapper(self, *args, **kwargs):
         env.server = self
-        env.host_string = self.host
-        return fn(self, *args, **kwargs)
+        with host_string(self.host):
+            return fn(self, *args, **kwargs)
     return wraps(fn)(wrapper)
 
 
@@ -44,8 +53,8 @@ def service_command(fn):
     def wrapper(self, *args, **kwargs):
         env.service = self
         env.server = self.server
-        env.host_string = self.server.host
-        return fn(self, *args, **kwargs)
+        with host_string(self.server.host):
+            return fn(self, *args, **kwargs)
     return wraps(fn)(wrapper)
 
 
@@ -70,7 +79,6 @@ class Server(object):
         if not hasattr(env, '_APT_UPDATED') or force:
             run('apt-get update')
             env._APT_UPDATED = True
-
 
     @server_command
     @run_as_sudo
