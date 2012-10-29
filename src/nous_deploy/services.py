@@ -5,6 +5,7 @@ from functools import wraps
 from fabric.api import run
 from fabric.state import env
 from fabric import network
+from fabric.context_managers import cd
 
 
 @contextmanager
@@ -125,12 +126,45 @@ class Sentry(Service):
 class Ututi(Service):
 
     @service_command
-    def start(self):
-        print "Starting", self.name, self.server.host
+    @run_as('ututi')
+    def staging_release(self):
+        run('/srv/en.u2ti.com/instance/bin/release_latest.sh')
 
     @service_command
+    @run_as('ututi')
+    def prepare(self):
+        with cd('/srv/ututi.com/instance'):
+            run('bin/prepare.sh')
+
+    @service_command
+    @run_as('ututi')
+    def release(self):
+        with cd('/srv/ututi.com/instance'):
+            run('bin/release_latest.sh')
+
+    @service_command
+    @run_as('ututi')
+    def start(self):
+        with cd('/srv/ututi.com/instance'):
+            run('bin/server_start.sh')
+
+    @service_command
+    @run_as('ututi')
+    def stop(self):
+        with cd('/srv/ututi.com/instance'):
+            run('bin/server_stop.sh')
+
+    @service_command
+    @run_as('ututi')
+    def status(self):
+        with cd('/srv/ututi.com/instance'):
+            run('bin/server_status.sh')
+
+    @service_command
+    @run_as('ututi')
     def restart(self):
-        print "Restarting", self.name, self.server.host
+        self.stop()
+        self.start()
 
 
 class BusyFlow(Service):
