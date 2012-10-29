@@ -134,7 +134,7 @@ class Ututi(Service):
     @run_as('ututi')
     def prepare(self):
         with cd('/srv/ututi.com/instance'):
-            run('bin/prepare.sh')
+            run('bin/prepare_latest.sh')
 
     @service_command
     @run_as('ututi')
