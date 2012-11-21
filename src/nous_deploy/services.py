@@ -2,7 +2,7 @@ import sys
 from contextlib import contextmanager
 from functools import wraps
 
-from fabric.api import run
+from fabric.api import run, sudo
 from fabric.state import env
 from fabric import network
 from fabric.context_managers import cd
@@ -187,6 +187,26 @@ class BusyFlowCeleryWorker(Service):
     @service_command
     def restart(self):
         print "Restarting", self.name, self.server.host
+
+
+class Jenkins(Service):
+
+    @service_command
+    @run_as_sudo
+    def setup(self):
+        self.server.apt_get_install("jenkins")
+        sudo("curl -L http://updates.jenkins-ci.org/update-center.json | sed '1d;$d' > /var/lib/jenkins/updates/default.json",
+             user="jenkins")
+        run('jenkins-cli -s http://localhost:8080 install-plugin git')
+        run('jenkins-cli -s http://localhost:8080 install-plugin port-allocator')
+        run('jenkins-cli -s http://localhost:8080 restart')
+
+class Git(Service):
+
+    @service_command
+    def setup(self):
+        self.server.ensure_group('git')
+        self.server.mkdir('/var/local/git')
 
 
 def init(servers):

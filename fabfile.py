@@ -5,6 +5,12 @@ servers = [services.Server(host='sentry.frgtn.net',
                            services=[services.Sentry(name='sentry'),
                                      services.Sentry(name='sentry2')]
                            ),
+           services.Server(host='sentry.frgtn.net',
+                           name='vututi',
+                           services=[services.Sentry(name='sentry'),
+                                     services.Ututi(name='ututi'),
+                                     services.Jenkins(name='jenkins'),
+                                     services.Git(name='git')]),
            services.Server(host='ututi.com',
                            name='ututi',
                            services=[services.Ututi(name='ututi')]
