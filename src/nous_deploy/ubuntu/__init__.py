@@ -5,6 +5,7 @@ import pkg_resources
 from functools import wraps
 from fabric.operations import sudo
 from fabric.operations import run
+from fabric.context_managers import settings
 from fabric.context_managers import cd
 from fabric.contrib.files import append
 from fabric.contrib.files import exists
@@ -69,12 +70,15 @@ class Server(object):
             run('apt-get update')
             env._APT_UPDATED = True
 
-    @run_as_sudo
-    def ssh_update_identities(self, username):
+    def getHomeDir(self, username):
         home_dir = '/home/%s' % username
         if username == 'root':
             home_dir = '/root'
+        return home_dir
 
+    @run_as_sudo
+    def ssh_update_identities(self, username):
+        home_dir = self.getHomeDir(username)
         with cd(home_dir):
             sudo('mkdir -p .ssh')
             identities = [ssh_key
@@ -100,7 +104,7 @@ class Server(object):
     def upload_config_template(self, name, to, context, template_dir=None,
                                **kwargs):
         if template_dir is None:
-            template_dir = pkg_resources.resource_filename('nous_deploy', 'config_templates')
+            template_dir = pkg_resources.resource_filename('nous_deploy.ubuntu', 'config_templates')
         self._upload_config_template(name, to, context, template_dir=template_dir,
                                      **kwargs)
 
@@ -113,8 +117,54 @@ class Server(object):
                         **kwargs)
 
     @run_as_sudo
+    def compile_locales(self):
+        run("locale-gen en_US.UTF-8")
+
+    @run_as_sudo
+    def apache_remove(self):
+        run('apt-get remove -y apache2 apache2.2-common apache2.2-bin apache2-utils')
+
+    @run_as_sudo
+    def nginx_install(self):
+        self.apt_get_install("nginx")
+        run('rm -f /etc/nginx/sites-enabled/default')
+
+    def getService(self, service_name):
+        service_obj = service_name
+        if isinstance(service_name, basestring):
+            for service in self.services:
+                if service.name == service_name:
+                    service_obj = service
+                    break
+        return service_obj
+
+    @run_as_sudo
+    def nginx_configure_site(self, service):
+        service = self.getService(service)
+        self.upload_config_template('nginx_proxy_settings.config',
+                                    '/etc/nginx/nginx_proxy_settings.config', {})
+        self.upload_config_template('nginx.config',
+                                    '/etc/nginx/sites-available/%s' % service.name,
+                                    {'service': service,
+                                     'server': self},
+                                    use_sudo=True)
+        with settings(warn_only=True):
+            run('ln -s /etc/nginx/sites-available/%s /etc/nginx/sites-enabled/%s' % (service.name, service.name))
+        run('/etc/init.d/nginx restart')
+
+    @run_as_sudo
+    def nginx_remove_site(self, service):
+        service = self.getService(service)
+        run('rm -f /etc/nginx/sites-available/%s' % service.name)
+        run('rm -f /etc/nginx/sites-enabled/%s' % service.name)
+        run('/etc/init.d/nginx restart')
+
+    @run_as_sudo
     def prepare(self):
         """Sets up all the dependencies"""
+        self.compile_locales()
+        self.apache_remove()
+        self.nginx_install()
         for service in self.services:
             service.prepare()
 
@@ -135,3 +185,11 @@ class Server(object):
         """Stops and removes all the services."""
         for service in self.services:
             service.remove()
+
+    @run_as_sudo
+    def ensure_shm(self):
+        # XXX check if file exists
+        self.upload_config_template('S56mountshm.sh', '/etc/rcS.d/S56mounshm.sh', {},
+                                    use_sudo=True)
+        run("chmod +x /etc/rcS.d/S56mounshm.sh")
+        run("/etc/rcS.d/S56mounshm.sh")
