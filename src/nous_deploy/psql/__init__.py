@@ -107,7 +107,7 @@ class Postgresql(Service):
 
     @run_as_sudo
     def setup(self):
-        self.server.ensure_user('ututi')
+        self.server.ensure_user(self.user)
         self.ensure_cluster()
         self.configure()
         self.start()
