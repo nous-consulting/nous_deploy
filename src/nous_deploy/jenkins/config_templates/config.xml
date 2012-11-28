@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description>Ututi Development branch</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.plugins.git.GitSCM">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <name>origin</name>
+        <refspec>+refs/heads/*:refs/remotes/origin/*</refspec>
+        <url>git@github.com:nous-consulting/ututi.git</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>origin/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <disableSubmodules>false</disableSubmodules>
+    <recursiveSubmodules>false</recursiveSubmodules>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <authorOrCommitter>false</authorOrCommitter>
+    <clean>false</clean>
+    <wipeOutWorkspace>false</wipeOutWorkspace>
+    <pruneBranches>false</pruneBranches>
+    <remotePoll>false</remotePoll>
+    <ignoreNotifyCommit>false</ignoreNotifyCommit>
+    <buildChooser class="hudson.plugins.git.util.DefaultBuildChooser"/>
+    <gitTool>Default</gitTool>
+    <submoduleCfg class="list"/>
+    <relativeTargetDir></relativeTargetDir>
+    <reference></reference>
+    <excludedRegions></excludedRegions>
+    <excludedUsers></excludedUsers>
+    <gitConfigName></gitConfigName>
+    <gitConfigEmail></gitConfigEmail>
+    <skipTag>false</skipTag>
+    <includedRegions></includedRegions>
+    <scmName></scmName>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers class="vector">
+    <hudson.triggers.SCMTrigger>
+      <spec>*/5 * * * *</spec>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>ulimit -c 1000000
+make stop_database
+LC_ALL=C make test_all
+make stop_database
+sloccount --wide --details src/  &gt; sloccount.sc
+make package_release</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.tasks.ArtifactArchiver>
+      <artifacts>ututi*.tar.gz</artifacts>
+      <latestOnly>true</latestOnly>
+    </hudson.tasks.ArtifactArchiver>
+    <hudson.tasks.BuildTrigger>
+      <childProjects>upload master</childProjects>
+      <threshold>
+        <name>SUCCESS</name>
+        <ordinal>0</ordinal>
+        <color>BLUE</color>
+      </threshold>
+    </hudson.tasks.BuildTrigger>
+    <hudson.plugins.sloccount.SloccountPublisher>
+      <pattern></pattern>
+      <encoding></encoding>
+    </hudson.plugins.sloccount.SloccountPublisher>
+    <hudson.plugins.cigame.GamePublisher/>
+    <hudson.tasks.Mailer>
+      <recipients>commits@ututi.com</recipients>
+      <dontNotifyEveryUnstableBuild>false</dontNotifyEveryUnstableBuild>
+      <sendToIndividuals>false</sendToIndividuals>
+    </hudson.tasks.Mailer>
+  </publishers>
+  <buildWrappers>
+    <org.jvnet.hudson.plugins.port__allocator.PortAllocator>
+      <ports>
+        <org.jvnet.hudson.plugins.port__allocator.DefaultPortType>
+          <name>PGPORT</name>
+        </org.jvnet.hudson.plugins.port__allocator.DefaultPortType>
+      </ports>
+    </org.jvnet.hudson.plugins.port__allocator.PortAllocator>
+  </buildWrappers>
+</project>
