@@ -1,11 +1,11 @@
 import sys
+import pkg_resources
+
 from contextlib import contextmanager
 from functools import wraps
 
-from fabric.api import run, sudo
 from fabric.state import env
 from fabric import network
-from fabric.context_managers import cd
 
 
 @contextmanager
@@ -21,80 +21,53 @@ def host_string(new_host_string):
 def run_as(user):
     def decorator(func):
         @wraps(func)
-        def inner(*args, **kwargs):
+        def inner(self, *args, **kwargs):
             old_user, host, port = network.normalize(env.host_string)
+            if not host:
+                host, port = self.server.host, self.server.port
+            env.service = self
+            env.server = self.server
             with host_string(network.join_host_strings(user, host, port)):
-                return func(*args, **kwargs)
+                return func(self, *args, **kwargs)
+        inner._is_a_command = True
         return inner
     return decorator
 
 
-def run_as_sudo(func):
+def run_as_user(func):
     @wraps(func)
-    def wrapper(*args, **kwargs):
-        return run_as(env.server.SUDO_USER)(func)(*args, **kwargs)
+    def wrapper(self, *args, **kwargs):
+        return run_as(self.user)(func)(self, *args, **kwargs)
+    wrapper._is_a_command = True
     return wrapper
 
 
-def server_command(fn):
-    parent = sys._getframe(1)
-    commands = parent.f_locals.setdefault('_commands', [])
-    commands.append(fn.__name__)
+def run_as_sudo(func):
+    @wraps(func)
     def wrapper(self, *args, **kwargs):
-        env.server = self
-        with host_string(self.host):
-            return fn(self, *args, **kwargs)
-    return wraps(fn)(wrapper)
-
-
-def service_command(fn):
-    parent = sys._getframe(1)
-    commands = parent.f_locals.setdefault('_commands', [])
-    commands.append(fn.__name__)
-    def wrapper(self, *args, **kwargs):
-        env.service = self
-        env.server = self.server
-        with host_string(self.server.host):
-            return fn(self, *args, **kwargs)
-    return wraps(fn)(wrapper)
-
-
-class Server(object):
-
-    SUDO_USER = 'root'
-
-    def __init__(self, host, name, services, settings={}):
-        self.host = host
-        self.name = name
-        self.services = [service.bind(self) for service in services]
-        self.settings = settings
-
-    @property
-    def commands(self):
-        return dict([(cmd, getattr(self, cmd))
-                     for cmd in self._commands])
-
-    @server_command
-    @run_as_sudo
-    def apt_get_update(self, force=False):
-        if not hasattr(env, '_APT_UPDATED') or force:
-            run('apt-get update')
-            env._APT_UPDATED = True
-
-    @server_command
-    @run_as_sudo
-    def apt_get_install(self, packages, options=''):
-        """Installs package via apt get."""
-        self.apt_get_update()
-        run('apt-get install %s -y %s' % (options, packages,))
+        return run_as(self.server.SUDO_USER)(func)(self, *args, **kwargs)
+    wrapper._is_a_command = True
+    return wrapper
 
 
 class Service(object):
 
-    def __init__(self, name, settings={}):
-        self._name = name
-        self.settings = settings
+    def __init__(self, name, user, settings=None):
+        self.collect_actions()
+        self.name = name
+        self.user = user
+        self.settings = settings if settings is not None else {}
         self.server = None
+
+    def collect_actions_from_class(self, cls):
+        return [k for k, v in cls.__dict__.items()
+                if hasattr(v, '_is_a_command')]
+
+    def collect_actions(self):
+        actions = set()
+        for cls in reversed(self.__class__.__mro__):
+            actions.update(self.collect_actions_from_class(cls))
+        self._commands = list(actions)
 
     @property
     def commands(self):
@@ -106,119 +79,41 @@ class Service(object):
         return self
 
     @property
-    def name(self):
+    def title(self):
         if self.server:
-            return "{host}_{service}".format(host=self.server.name, service=self._name)
-        return self._name
+            return "{host}_{service}".format(host=self.server.title, service=self.name)
+        return self.name
 
+    def upload_config_template(self, name, to, context, **kwargs):
+        template_dir = pkg_resources.resource_filename(self.__class__.__module__, 'config_templates')
+        self.server.upload_config_template(name, to, context, template_dir=template_dir,
+                                           **kwargs)
 
-class Sentry(Service):
+    # API
 
-    @service_command
-    def start(self):
-        print "Starting", self.name, self.server.host
-
-    @service_command
-    def restart(self):
-        print "Restarting", self.name, self.server.host
-
-
-class Ututi(Service):
-
-    @service_command
-    @run_as('ututi')
-    def staging_release(self):
-        run('/srv/en.u2ti.com/instance/bin/release_latest.sh')
-
-    @service_command
-    @run_as('ututi')
     def prepare(self):
-        with cd('/srv/ututi.com/instance'):
-            run('bin/prepare_latest.sh')
+        pass
 
-    @service_command
-    @run_as('ututi')
-    def release(self):
-        with cd('/srv/ututi.com/instance'):
-            run('bin/release_latest.sh')
-
-    @service_command
-    @run_as('ututi')
-    def start(self):
-        with cd('/srv/ututi.com/instance'):
-            run('bin/server_start.sh')
-
-    @service_command
-    @run_as('ututi')
-    def stop(self):
-        with cd('/srv/ututi.com/instance'):
-            run('bin/server_stop.sh')
-
-    @service_command
-    @run_as('ututi')
-    def status(self):
-        with cd('/srv/ututi.com/instance'):
-            run('bin/server_status.sh')
-
-    @service_command
-    @run_as('ututi')
-    def restart(self):
-        self.stop()
-        self.start()
-
-
-class BusyFlow(Service):
-
-    @service_command
-    def start(self):
-        print "Starting", self.name, self.server.host
-
-    @service_command
-    def restart(self):
-        print "Restarting", self.name, self.server.host
-
-
-class BusyFlowCeleryWorker(Service):
-
-    @service_command
-    def start(self):
-        print "Starting", self.name, self.server.host
-
-    @service_command
-    def restart(self):
-        print "Restarting", self.name, self.server.host
-
-
-class Jenkins(Service):
-
-    @service_command
-    @run_as_sudo
     def setup(self):
-        self.server.apt_get_install("jenkins")
-        sudo("curl -L http://updates.jenkins-ci.org/update-center.json | sed '1d;$d' > /var/lib/jenkins/updates/default.json",
-             user="jenkins")
-        run('jenkins-cli -s http://localhost:8080 install-plugin git')
-        run('jenkins-cli -s http://localhost:8080 install-plugin port-allocator')
-        run('jenkins-cli -s http://localhost:8080 restart')
+        pass
 
-class Git(Service):
+    def configure(self):
+        pass
 
-    @service_command
-    def setup(self):
-        self.server.ensure_group('git')
-        self.server.mkdir('/var/local/git')
+    def remove(self):
+        pass
 
 
 def init(servers):
     scope = {}
     for server in servers:
         for command_name, cmd in server.commands.items():
-            command_name = '{server}_{command}'.format(server=server.name,
+            command_name = '{server}_{command}'.format(server=server.title,
                                                        command=command_name)
             scope[command_name] = cmd
         for service in server.services:
             for command_name, cmd in service.commands.items():
-                command_name = '{service}_{command}'.format(service=service.name,
+                command_name = '{service}_{command}'.format(service=service.title,
                                                             command=command_name)
                 scope[command_name] = cmd
     return scope
