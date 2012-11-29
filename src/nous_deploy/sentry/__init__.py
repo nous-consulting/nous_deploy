@@ -113,4 +113,4 @@ class Sentry(Service):
     def remove(self):
         self.stop()
         run('rm -rf %s' % self.service_path)
-        run('rm -f /etc/supervisor/conf.d/%s.conf' % self.name
+        run('rm -f /etc/supervisor/conf.d/%s.conf' % self.name)
