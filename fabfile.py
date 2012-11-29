@@ -3,6 +3,7 @@ from nous_deploy import ubuntu
 from nous_deploy import vututi
 from nous_deploy import jenkins
 from nous_deploy import psql
+from nous_deploy import sentry
 
 ignas = ('ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAIEA1k5A4ViR29O3XEride/ZIO52LNwEPVyTh'
          'v8Rk9pweyMrlPoyg43TG+slndvy4Vju73tnd1fGWDrmAast9WVLm5Pd5GaWCtP4WU8I24'
@@ -37,6 +38,13 @@ servers = [ubuntu.Server(host='sentry.frgtn.net',
                                                            'host_name': 'vututi.frgtn.net'}),
                                    jenkins.Jenkins(name='jenkins',
                                                    user='jenkins'),
+                                   sentry.Sentry(name='sentry2',
+                                                 user='sentry2',
+                                                 settings={'hostname': 'sentry.frgtn.net',
+                                                           'port': 19001,
+                                                           'admin_username': 'admin',
+                                                           'admin_email': 'saulius@nous.lt',
+                                                           'admin_password': 'medausstatinaite'})
                                    # services.Git(name='git')
                                    ]),
            # services.Server(host='ututi.com',
