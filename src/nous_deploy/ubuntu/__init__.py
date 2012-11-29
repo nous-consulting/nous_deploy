@@ -57,7 +57,9 @@ class Server(object):
         actions = set()
         for cls in reversed(self.__class__.__mro__):
             actions.update(self.collect_actions_from_class(cls))
-        self._commands = list(actions)
+        self._commands = [action
+                          for action in list(actions)
+                          if not action.startswith('_')]
 
     @property
     def commands(self):
