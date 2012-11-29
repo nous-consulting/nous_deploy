@@ -21,6 +21,9 @@ frgtn = ('ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAgByG8k8a7n2mTWPr9q19KgzZArLBlinp0EXc'
          'HgQ3XpB9zMwMK4uTmgxEgYgLr338vPhbwOZ2kV9wrpvWsvtpt+Trkuz/lKomdry7BdP5E'
          'D6Od58Wsw4WZ4qFCp1HOrQf0ZMSw== frgtn@thkp')
 
+sentry_dsn = {'public': '73d402a014734bbc9ea4a63737eea6b7',
+              'private': 'b3f9d14ddcca4609a47d55b050fb80e7'}
+
 
 servers = [ubuntu.Server(host='sentry.frgtn.net',
                          name='vututi',
@@ -40,11 +43,14 @@ servers = [ubuntu.Server(host='sentry.frgtn.net',
                                                    user='jenkins'),
                                    sentry.Sentry(name='sentry2',
                                                  user='sentry2',
-                                                 settings={'hostname': 'sentry.frgtn.net',
-                                                           'port': 19001,
+                                                 settings={'host_name': 'sentry.frgtn.net',
+                                                           'port': 19000,
                                                            'admin_username': 'admin',
                                                            'admin_email': 'saulius@nous.lt',
-                                                           'admin_password': 'medausstatinaite'})
+                                                           'admin_password': 'medausstatinaite',
+                                                           'project_name': 'vututi',
+                                                           'dsn_public': sentry_dsn['public'],
+                                                           'dsn_secret': sentry_dsn['private']})
                                    # services.Git(name='git')
                                    ]),
            # services.Server(host='ututi.com',

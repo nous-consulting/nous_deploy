@@ -1,13 +1,11 @@
 import os
+from hashlib import sha1
+
+from fabric.operations import run
 
 from nous_deploy.services import run_as_user
 from nous_deploy.services import Service
 from nous_deploy.services import run_as_sudo
-
-from fabric.contrib.files import exists
-from fabric.context_managers import cd
-from fabric.operations import open_shell
-from fabric.operations import run
 
 
 class Sentry(Service):
@@ -26,15 +24,19 @@ class Sentry(Service):
 
     @property
     def port(self):
-        return self.settings.port
+        return self.settings['port']
 
     @property
     def db_path(self):
         return os.path.join(self.data_path, 'sentry.db.sqlite')
 
     @property
+    def host_name(self):
+        return self.settings['host_name']
+
+    @property
     def url_prefix(self):
-        return 'http://%s' % self.settings['hostname']
+        return 'http://%s' % self.settings['host_name']
 
     @property
     def config_file(self):
@@ -50,14 +52,21 @@ class Sentry(Service):
 
     @property
     def password_hexdigest(self):
-        from hashlib import sha1
         return sha1(self.password_salt + self.settings['admin_password']).hexdigest()
+
+    @property
+    def static_dir(self):
+        return os.path.join(self.python_path, 'lib/python2.7/site-packages/sentry/static')
+
+    @property
+    def static_prefix(self):
+        return '_static'
 
     def sentry(self, command):
         run('%s --config=%s %s' % (self.sentry_bin, self.config_file, command))
 
     @run_as_user
-    def init_database(self):
+    def db_init(self):
         self.upload_config_template('initial_data.json',
                                     os.path.join(self.data_path, 'initial_data.json'),
                                     {'service': self})
@@ -65,17 +74,21 @@ class Sentry(Service):
         self.sentry('upgrade --noinput')
         # Make sure initial.json is deleted so it doesn't get loaded
         # on next `sentry syncdb`
-        run('rm %s' % os.path.join(self.data_path, 'initial_data.json'))
+        run('rm -f %s' % os.path.join(self.data_path, 'initial_data.json'))
 
     @run_as_sudo
     def setup(self):
         self.server.ensure_user(self.user)
         run('mkdir -p %s' % (self.service_path,))
         run('chown -R %s:%s %s' % (self.user, self.user, self.service_path))
+        self.setup_sandbox()
+
+    @run_as_user
+    def setup_sandbox(self):
         run('virtualenv --no-site-packages %s' % self.python_path)
         run('%s install sentry' % (os.path.join(self.python_path, 'bin/pip')))
         self.configure()
-        self.init_database()
+        self.db_init()
 
     @run_as_sudo
     def prepare(self):
@@ -83,12 +96,13 @@ class Sentry(Service):
         for package in packages:
             self.server.apt_get_install(package)
 
-
     @run_as_sudo
     def configure_supervisor(self):
         self.upload_config_template('sentry_supervisord.conf',
                                     '/etc/supervisor/conf.d/%s.conf' % self.name,
                                     {'service': self})
+        run('supervisorctl reload')
+
     @run_as_user
     def configure(self):
         run('mkdir -p %s' % self.data_path)
@@ -96,6 +110,7 @@ class Sentry(Service):
                                     self.config_file,
                                     {'service': self})
         self.configure_supervisor()
+        self.server.nginx_configure_site(self)
 
     @run_as_sudo
     def start(self):
@@ -112,5 +127,6 @@ class Sentry(Service):
     @run_as_sudo
     def remove(self):
         self.stop()
+        self.server.nginx_remove_site(self)
         run('rm -rf %s' % self.service_path)
         run('rm -f /etc/supervisor/conf.d/%s.conf' % self.name)

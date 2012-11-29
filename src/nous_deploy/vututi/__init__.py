@@ -25,6 +25,10 @@ class VUtuti(Service):
     def host_name(self):
         return self.settings['host_name']
 
+    @property
+    def static_prefix(self):
+        return 'static'
+
     @run_as_sudo
     def prepare(self):
         self.server.apt_get_install(' '.join([
