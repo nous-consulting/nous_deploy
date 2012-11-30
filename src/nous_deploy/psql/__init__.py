@@ -43,9 +43,9 @@ class Postgresql(Service):
         return os.path.join(self.service_path, 'var', 'run')
 
     @property
-    def connection_string(self):
-        return "postgresql:///%s?host=%s/var/run" % (
-            self.name, self.service_path)
+    def sqlalchemy_url(self):
+        return "postgresql://%s:%s@localhost:%d/%s" % (
+            self.user, self.password, self.db_port, self.name)
 
     def dir(self):
         return cd(self.service_path)
@@ -80,12 +80,20 @@ class Postgresql(Service):
             self.create_cluster()
 
     @run_as_user
+    def createlang_plpgsql(self):
+        with self.dir():
+            self.pg_run('createlang plpgsql',
+                        "%s -h %s -p %s" % (self.name, self.socket_dir, self.db_port))
+
+    @run_as_user
     def create_database(self):
         with self.dir():
             self.pg_run('createdb',
                         '-E UTF8 %s -h %s -p %s' % (self.name,
                                                     self.socket_dir,
                                                     self.db_port))
+            if self.version == '8.4':
+                self.createlang_plpgsql()
             run('touch ' + os.path.join(self.cluster_path, 'created_%s' % self.name))
 
     @run_as_user
@@ -132,9 +140,13 @@ class Postgresql(Service):
     def pg_ctl(self, command):
         log_file = os.path.join(self.service_path, 'var', 'log', 'pg.log')
         with self.dir():
-            self.pg_run('pg_ctl', " -D {cluster_path} -o '-c unix_socket_directory={socket_dir}' -l {log_file} {command}".format(
+            extra_options = "-o '%s'" % ' -c '.join(
+                ['',
+                 'unix_socket_directory={socket_dir}'.format(socket_dir=self.socket_dir)] +
+                self.settings.get('extra_options', []))
+            self.pg_run('pg_ctl', " -D {cluster_path} {extra_options} -l {log_file} {command}".format(
                     cluster_path=self.cluster_path,
-                    socket_dir=self.socket_dir,
+                    extra_options=extra_options,
                     log_file=log_file,
                     command=command))
 

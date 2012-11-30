@@ -4,6 +4,7 @@ import pkg_resources
 from contextlib import contextmanager
 from functools import wraps
 
+from fabric.utils import _AttributeDict
 from fabric.state import env
 from fabric import network
 
@@ -52,11 +53,30 @@ def run_as_sudo(func):
 
 class Service(object):
 
+    default_settings = {}
+
+    def propagate_settings(self):
+        for _ in range(len(self.settings)):
+            for key, value in self.settings.items():
+                if isinstance(value, basestring):
+                    new_value = value.format(**self.settings)
+                    self.settings[key] = new_value
+        self.settings = _AttributeDict(self.settings)
+
     def __init__(self, name, user, settings=None):
         self.collect_actions()
         self.name = name
         self.user = user
-        self.settings = settings if settings is not None else {}
+
+        self.settings = dict(self.default_settings)
+        self.settings['name'] = name
+        self.settings['user'] = user
+
+        settings = settings if settings is not None else {}
+        self.settings.update(settings)
+
+        self.propagate_settings()
+
         self.server = None
 
     def collect_actions_from_class(self, cls):
