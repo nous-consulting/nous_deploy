@@ -20,6 +20,12 @@ frgtn = ('ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAgByG8k8a7n2mTWPr9q19KgzZArLBlinp0EXc'
          'I/HLN9BpUaHxwaWJ1L44Wyni0GAisGDVdOZeNL6FD4QovoOwZMJujajEoeUXh2JDkw4mq'
          'HgQ3XpB9zMwMK4uTmgxEgYgLr338vPhbwOZ2kV9wrpvWsvtpt+Trkuz/lKomdry7BdP5E'
          'D6Od58Wsw4WZ4qFCp1HOrQf0ZMSw== frgtn@thkp')
+hudson = ('ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAzWhG/uSVbhrZ9NP9mTQiSJLp1O3uEEbX'
+          'fb3Vu24Sz7TyU5GOHDYogv97H4HFqvczEVw9O0luFER29PjbI+mVe1TKnXG2Caz8OJoj'
+          'cU1pYdluskYJcwNhFFOdVR7lTdw/SFidJycoDje1xc3qHjN2yUO8crH60Xob/7dY2Vbh'
+          'OSP6UxvDusNsHHII94jIrro4UEHjQrwH8Jx4aVBlAURLhVvkjgeVvrVJxnVgNnUK4QgW'
+          'LPRYTKzfr/gOGfhqR5fTchtKedNdApiHQKwP6vjH1J5+VeX3EZUuIl3PCB+9h2hNYXs7'
+          'KY0NmzqgjsH4sNgAk6i+Vz4Rp+N6VmB2LO53tQ== hudson@bmw')
 
 sentry_dsn = {'public': '73d402a014734bbc9ea4a63737eea6b7',
               'private': 'b3f9d14ddcca4609a47d55b050fb80e7'}
@@ -27,7 +33,9 @@ sentry_dsn = {'public': '73d402a014734bbc9ea4a63737eea6b7',
 
 servers = [ubuntu.Server(host='sentry.frgtn.net',
                          name='vututi',
-                         settings={'identities': [('', ignas), ('', frgtn)]},
+                         settings={'identities': [('', ignas),
+                                                  ('', frgtn),
+                                                  ('ututi', hudson)]},
                          services=[psql.Postgresql(name='ututi_db',
                                                    user='ututi',
                                                    settings={'port': 57861,
