@@ -1,13 +1,18 @@
 import os
 import pkg_resources
 
+from StringIO import StringIO
 from nous_deploy.services import Service
 from nous_deploy.services import run_as_user
 from nous_deploy.services import run_as_sudo
 from fabric.utils import warn
+from fabric.context_managers import settings
 from fabric.context_managers import prefix
 from fabric.context_managers import cd
+from fabric.contrib.files import sed
 from fabric.contrib.files import exists
+from fabric.contrib.files import append
+from fabric.operations import get
 from fabric.operations import put
 from fabric.api import run
 
@@ -290,3 +295,73 @@ class VUtuti(Service):
                     run("touch READY")
         finally:
             run("rm %s" % build_lock)
+
+    @run_as_sudo
+    def update_postfix_transport(self):
+        # XXX kill all lines that start with group hostname in /etc/postfix/transport
+        append('/etc/postfix/transport', '{{groups_host_name}}  {{name}}_mailer:'.format(
+                groups_host_name=self.settings.groups_host_name,
+                name=self.name))
+        run('postmap /etc/postfix/transport')
+
+    @run_as_sudo
+    def update_postfix_main_cf(self):
+        """ # /etc/postfix/main.cf
+        mydestination = ututi.com, avilys, localhost.localdomain, localhost
+        virtual_alias_domains = korys.org, ututi.lt, ututi.pl
+        relay_domains = lists.ututi.lt groups.ututi.lt groups.ututi.pl nous.lt groups.ututi.com
+        """
+        with settings(warn_only=True):
+            relay_domains = run('grep "^relay_domains" /etc/postfix/main.cf', shell=False)
+        if relay_domains:
+            key, value = relay_domains.strip().split('=')
+        else:
+            key, value = 'relay_domains', ''
+        domains = [domain.strip() for domain in value.split(' ')]
+        if self.settings.groups_host_name not in domains:
+            domains.append(self.settings.groups_host_name)
+        new_relay_domains = '{key} = {value}'.format(
+            key=key.strip(),
+            value=' '.join(domains).strip())
+        if relay_domains:
+            sed('/etc/postfix/main.cf', relay_domains, new_relay_domains)
+        else:
+            append('/etc/postfix/main.cf', new_relay_domains)
+
+        append('/etc/postfix/main.cf', 'transport_maps = hash:/etc/postfix/transport')
+
+
+    @run_as_sudo
+    def update_postfix_master_cf(self):
+        master_cf_orig = StringIO()
+        get('/etc/postfix/master.cf', master_cf_orig)
+        master_cf_orig.seek(0)
+        lines = [l.rstrip() for l in master_cf_orig.readlines()]
+        for n, l in enumerate(lines):
+            if l.startswith('{name}_mailer'.format(name=self.settings.name)):
+                found = True
+                break
+        else:
+            found = False
+
+        if found:
+            lines = lines[0:n] + lines[n+3:]
+        lines.extend([
+                '{name}_mailer  unix  -       n       n       -       -       pipe'.format(name=self.settings.name),
+                '  flags=FR user={user} argv={instance_code_dir}/bin/mailpost http://{host_name}/got_mail {upload_dir}'.format(
+                    user=self.user,
+                    instance_code_dir=self.settings.instance_code_dir,
+                    host_name=self.settings.host_name,
+                    upload_dir=self.settings.upload_dir),
+                '  ${nexthop} ${user}',
+            ])
+        master_cf_new = StringIO('\n'.join(lines) + '\n')
+        put(master_cf_new, '/etc/postfix/master.cf', mode=0o644)
+
+    @run_as_sudo
+    def configure_postfix(self):
+        self.update_postfix_master_cf()
+        self.update_postfix_main_cf()
+        self.update_postfix_transport()
+        run('postfix reload')
+
