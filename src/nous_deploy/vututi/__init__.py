@@ -227,6 +227,17 @@ class VUtuti(Service):
         self.configure()
         # self.server.cron_setup(self.crontab) # XXX not implemented
 
+    @run_as_sudo
+    def release(self):
+        release_dir = self.getNextReleaseIfReady()
+        if release_dir:
+            self.stop()
+            self.link_release(release_dir)
+            self.migrate()
+            self.start()
+        else:
+            warn("Next release not ready yet")
+
     @run_as_user
     def getLastPackagedRelease(self):
         return run("find %s | sort | tail -1" % self.settings.package_dir).strip()
