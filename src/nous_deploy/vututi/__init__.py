@@ -181,6 +181,7 @@ class VUtuti(Service):
     @run_as_user
     def clear_database(self):
         self.server.getService(self.database).execute_psql('drop schema public cascade')
+        self.server.getService(self.database).droplang('plpgsql')
         self.server.getService(self.database).execute_psql('create schema public')
 
     @run_as_user
@@ -195,14 +196,20 @@ class VUtuti(Service):
         return ["curl -s http://ututi.com/news/daily?date=`date -u +%Y-%m-%d` > /dev/null",
                 "curl -s http://ututi.com/news/hourly -F date=`date -u +%Y-%m-%d` -F hour=`date -u +%H` > /dev/null"]
 
+    @run_as_user
     def import_backup(self):
         self.clear_database()
         # $PG_PATH/bin/pg_restore -d release -h $PWD/var/run < $1/dbdump || true
         # rsync -rt $1/files_dump/uploads/ uploads/
 
+    @run_as_user
     def import_inital_backup(self):
-        self.clear_database()
-        self.getDatabaseService().import_backup('{backup_dir}/initial/dbdump'.format(backup_dir=self.settings.backup_dir))
+        self.stop()
+        with settings(warn_only=True):
+            self.clear_database()
+            self.server.getService(self.database).import_dump('{backup_dir}/initial/dbdump'.format(backup_dir=self.settings.backups_dir))
+            self.ensure_all_files_present()
+        self.start()
 
     @run_as_user
     def migrate(self):
