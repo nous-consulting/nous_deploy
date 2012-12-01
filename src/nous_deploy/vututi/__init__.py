@@ -8,6 +8,7 @@ from nous_deploy.services import run_as_sudo
 from fabric.utils import warn
 from fabric.context_managers import settings
 from fabric.context_managers import prefix
+from fabric.context_managers import settings
 from fabric.context_managers import cd
 from fabric.contrib.files import sed
 from fabric.contrib.files import exists
@@ -365,3 +366,12 @@ class VUtuti(Service):
         self.update_postfix_transport()
         run('postfix reload')
 
+    @run_as_user
+    def ensure_all_files_present(self):
+        with settings(forward_agent=True):
+            run(' '.join([os.path.join(self.settings.instance_code_dir, 'bin/py'),
+                          os.path.join(self.settings.instance_code_dir, 'scripts/ensure_all_files_present.py'),
+                          os.path.join(self.settings.instance_dir, 'release.ini'),
+                          'ututi@ututi.com',
+                          '/srv/ututi.com/instance/uploads',
+                          self.settings.upload_dir]))
