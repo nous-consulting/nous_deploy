@@ -64,6 +64,12 @@ class Postgresql(Service):
         return os.path.join(self.BIDNIR, 'psql') + ' -U %s -d %s -h %s -p %s' % (
             self.user, self.name, self.socket_dir, self.db_port)
 
+    @run_as_user
+    def import_dump(self, path_to_dump):
+        restore_cmd = os.path.join(self.BIDNIR, 'pg_restore') + ' -U %s -d %s -h %s -p %s' % (
+            self.user, self.name, self.socket_dir, self.db_port)
+        run(restore_cmd + ' < ' + path_to_dump)
+
     @run_as_sudo
     def create_cluster(self):
         run("mkdir -p %s" % self.service_path)

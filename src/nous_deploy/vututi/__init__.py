@@ -194,6 +194,10 @@ class VUtuti(Service):
         # $PG_PATH/bin/pg_restore -d release -h $PWD/var/run < $1/dbdump || true
         # rsync -rt $1/files_dump/uploads/ uploads/
 
+    def import_inital_backup(self):
+        self.clear_database()
+        self.getDatabaseService().import_backup('{backup_dir}/initial/dbdump'.format(backup_dir=self.settings.backup_dir))
+
     @run_as_user
     def migrate(self):
         with self.dir():
