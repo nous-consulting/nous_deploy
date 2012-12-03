@@ -42,9 +42,11 @@ class Server(object):
     SUDO_USER = 'root'
     port = 22
 
-    def __init__(self, host, name, services, settings=None):
+    def __init__(self, host, name, services, port=None, settings=None):
         self.collect_actions()
         self.host = host
+        if port is not None:
+            self.port = port
         self.name = self.title = name
         self.services = [service.bind(self) for service in services]
         self.settings = settings if settings is not None else {}
@@ -72,11 +74,9 @@ class Server(object):
             run('apt-get update')
             env._APT_UPDATED = True
 
+    @run_as_sudo
     def getHomeDir(self, username):
-        home_dir = '/home/%s' % username
-        if username == 'root':
-            home_dir = '/root'
-        return home_dir
+        return run("echo ~%s" % username).strip()
 
     @run_as_sudo
     def ssh_update_identities(self, username):
@@ -92,8 +92,9 @@ class Server(object):
     @run_as_sudo
     def ensure_user(self, username):
         username = username
-        home_dir = '/home/%s' % username
-        if not exists(home_dir):
+        with settings(warn_only=True):
+            result = run("id %s" % username)
+        if not result.succeeded:
             run('adduser %s --disabled-password --gecos ""' % username)
             self.ssh_update_identities(username)
 
